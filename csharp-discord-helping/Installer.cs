@@ -1,135 +1,82 @@
-
 using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
-using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using Octokit;
-using FileMode = System.IO.FileMode;
 
 namespace csharp_discord_helping;
 
 public static class Installer
 {
-    private static async Task DownloaderAsync(string url, string path)
+    private static OS Platform => OsMetadata.Platform;
+    private static OsMetadata PlatformMeta => OsMetadata.PlatformMeta;
+
+    // Store a single HttpClient instance, so that we don't build a new on on each request.
+    private static readonly HttpClient _httpClient = new();
+
+    private static async Task DownloadAsync(string url, string path)
     {
-        HttpClient httpClient = new HttpClient();
-        var requestMessage = new HttpRequestMessage(HttpMethod.Get, url);
-        requestMessage.Headers.Add("user-agent", "foo");
-        var results = await httpClient.SendAsync(requestMessage);
-        FileStream fileStream = new FileStream(path, FileMode.Create);
+        // The logic that was previously here was repeated, reuse the RequestAsync method
+        // that we already had, which did the same thing
+        var results = await RequestAsync(url);
+
+        // I just like File.Create, same thing. (this is just opinion)
+        FileStream fileStream = File.Create(path);
+
         await results.Content.CopyToAsync(fileStream);
+
         fileStream.Close();
         fileStream.Dispose();
-        requestMessage.Dispose();
         results.Dispose();
     }
 
-    private static async Task<HttpResponseMessage> DownloaderAsync(string url)
+    private static async Task<HttpResponseMessage> RequestAsync(string url)
     {
-        HttpClient httpClient = new HttpClient();
-        var requestMessage = new HttpRequestMessage(HttpMethod.Get, url);
+        // The `using` keyword will automatically Dispose() the message when `requestMessage`
+        // falls out of scope (at the end of this method)
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Get, url);
         requestMessage.Headers.Add("user-agent", "foo");
-        return await httpClient.SendAsync(requestMessage);
+        return await _httpClient.SendAsync(requestMessage);
     }
 
     public static async Task Main(string[] args)
     {
-        string temp = "";
-        string branch = "";
-        if (args.Length == 0)
-        {
-            branch = "Stable";
-        }
-        else
-        {
-            branch = args[0].ToString();
+        var branch = Branch.Stable;
+
+        if (args.Length != 0) {
+            // This will assign to the `branch` variable above, and with throw the exception if the
+            // string can't be parsed to a valid branch
+            // verify branch is empty or is valid or not
+            if (!Enum.TryParse(args[0], out branch)) {
+                throw new Exception("The branch is not valid. valid branches are : [ Stable , Canary ,  PTB ]");
+            }
         }
 
-        // verify branch is empty or is valid or not
-        List<string> branches = ["Stable", "Canary", "PTB"];
-        if (!branches.Contains(branch))
-        {
-            throw new Exception("The branch is not valid. valid branches are : [ Stable , Canary ,  PTB ]");
-        }
-
-        if (branch == "Stable") { branch = ""; }
+        var branchName = branch.DisplayName();
 
         //retrieve system information & get ready variables
         string arch = RuntimeInformation.OSArchitecture.ToString().ToLower();
 
-        string Platform = "";
-        if (OperatingSystem.IsLinux())
-        {
-            Platform = "linux";
+        if (!DiscordIsInstalled(branch)) {
+            throw new Exception("Discord " + branchName + " is not installed");
         }
-        else if (OperatingSystem.IsMacOS())
-        {
-            Platform = "darwin";
-        }
-        else if (OperatingSystem.IsWindows())
-        {
-            Platform = "win";
-        }
-        else { throw new Exception("OS is Not Supported"); }
-        //gets temp folder loaction & verify that discord exists, if not throw an exception
-        // add does other platform specific stuff
-        switch (Platform)
-        {
-            case "win":
-                {
-                    temp = Path.GetTempPath();
-                    if (!(Directory.Exists(Environment.GetEnvironmentVariable("localappdata") + @"\Discord" + branch)))
-                    {
-                        throw new Exception("Discord " + branch + " is not installed");
-                    }
-                    break;
 
-                }
-            case "darwin":
-                {
-                    temp = "~/Library/Caches";
-                    if (!(Directory.Exists("/Library/Application Support/Discord" + branch)))
-                    {
-                        throw new Exception("Discord " + branch + " is not installed");
-                    }
-                    break;
-                }
-            case "linux":
-                {
-                    temp = "/tmp";
-                    try
-                    {
-                        Process discord = new Process();
-                        discord.StartInfo.UseShellExecute = true;
-                        discord.StartInfo.FileName = "discord" + branch;
-                        discord.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                        discord.Start();
-                        discord.Kill();
-                        discord.WaitForExit();
-                        discord.Dispose();
-                    }
-                    catch
-                    {
-                        throw new Exception("Discord " + branch + " is not installed");
-                    }
-                    break;
-                }
-        };
         Console.WriteLine("Your OS is: " + Platform);
         Console.WriteLine("Your Architecture type is: " + arch);
-        Console.WriteLine("Your Temp folder is: " + temp);
+        Console.WriteLine("Your Temp folder is: " + PlatformMeta.TempPath);
+
         //download source code and dependencies
         string workspaceName = "BetterDiscord";
-        String repositoryName = "BetterDiscord";
+        string repositoryName = "BetterDiscord";
 
         var client = new GitHubClient(new ProductHeaderValue(repositoryName));
 
         // Retrieve a List of Releases in the Repository, and get latest zipball
+        var temp = PlatformMeta.TempPath;
         var releases = await client.Repository.Release.GetLatest(workspaceName, repositoryName);
-        await DownloaderAsync(releases.ZipballUrl, Path.Combine(temp + "betterdiscord.zip"));
+        await DownloadAsync(releases.ZipballUrl, Path.Combine(temp + "betterdiscord.zip"));
         Console.WriteLine("Downloaded BD");
 
         ZipFile.ExtractToDirectory(Path.Combine(temp + "betterdiscord.zip"), temp, true);
@@ -154,28 +101,25 @@ public static class Installer
             //set up node
             Console.WriteLine("Node.js is not installed!");
             const string nodebaseurl = @"https://nodejs.org/dist/latest/";
-            var results = await DownloaderAsync(nodebaseurl);
-            List<string> hrefTags = new List<string>();
+            var results = await RequestAsync(nodebaseurl);
             var parser = new HtmlParser();
             var document = parser.ParseDocument(await results.Content.ReadAsStringAsync());
-            foreach (IElement element in document.QuerySelectorAll("a"))
-            {
-                hrefTags.Add(element.GetAttribute("href"));
-            }
-            string AchiveExt = "";
-            if (Platform == "win") { AchiveExt = ".zip"; }
-            else { AchiveExt = ".tar.xz"; }
-            var myRegex = new Regex("^.*-" + Platform + "-" + arch + AchiveExt + "$");
-            string Nodever = hrefTags.Where(x => myRegex.IsMatch(x)).ToList()[0];
-            Console.WriteLine("The NodeJS version that will be downloaded is: " + Nodever);
-            results.Dispose();
-            string execExt = "";
+            // Can use LINQ instead of `new List<string>` + the foreach with list.Add
+            List<string?> hrefTags = document
+                .QuerySelectorAll("a")
+                .Select(element => element.GetAttribute("href"))
+                .ToList();
 
-            await DownloaderAsync(nodebaseurl + Nodever, Path.Combine(temp + "node" + AchiveExt));
-            if (Platform == "win")
+            var myRegex = new Regex("^.*-" + Platform + "-" + arch + PlatformMeta.ArchiveExt + "$");
+            // Use .First() instead of .ToList()[0], so that we don't allocate an entire new array
+            string nodeVer = hrefTags.First(x => myRegex.IsMatch(x));
+            Console.WriteLine("The NodeJS version that will be downloaded is: " + nodeVer);
+            results.Dispose();
+
+            await DownloadAsync(nodebaseurl + nodeVer, Path.Combine(temp + "node" + PlatformMeta.ArchiveExt));
+            if (Platform == OS.win)
             {
                 ZipFile.ExtractToDirectory(Path.Combine(temp + "node.zip"), temp, true);
-                execExt = ".exe";
             }
             else
             {
@@ -185,11 +129,11 @@ public static class Installer
             Console.WriteLine("Extracted NodeJS");
             Console.WriteLine("Installing pnpm");
             Directory.SetCurrentDirectory(bddir);
-            var node = Nodever.Replace(AchiveExt, "");
+            var node = nodeVer.Replace(PlatformMeta.ArchiveExt, "");
             string Nodedir = Path.Combine(temp + node);
             process = new Process();
             process.StartInfo.UseShellExecute = true;
-            process.StartInfo.FileName = Nodedir + "/npm" + execExt;
+            process.StartInfo.FileName = Nodedir + "/npm" + PlatformMeta.ArchiveExt;
             process.StartInfo.WorkingDirectory = bddir;
             process.StartInfo.Arguments = "i pnpm -g";
             process.StartInfo.WorkingDirectory = Nodedir;
@@ -242,4 +186,106 @@ public static class Installer
             Console.WriteLine("Done");
         }
     }
+
+    private static bool DiscordIsInstalled(Branch branch)
+    {
+        var branchName = branch.DisplayName();
+
+        switch (Platform)
+        {
+            case OS.win:
+                return Directory.Exists(Environment.GetEnvironmentVariable("localappdata") + @"\Discord" + branchName);
+            case OS.darwin:
+                return Directory.Exists("/Library/Application Support/Discord" + branchName);
+            case OS.linux:
+            {
+                try
+                {
+                    Process discord = new Process();
+                    discord.StartInfo.UseShellExecute = true;
+                    discord.StartInfo.FileName = "discord" + branchName;
+                    discord.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                    discord.Start();
+                    discord.Kill();
+                    discord.WaitForExit();
+                    discord.Dispose();
+                }
+                catch {
+                    return false;
+                }
+
+                return true;
+            }
+            case OS.Unknown:
+                throw new Exception("OS is Not Supported");
+            default:
+                throw new NotImplementedException();
+        }
+    }
+}
+
+enum Branch
+{
+    Stable,
+    Canary,
+    PTB,
+}
+
+internal static class BranchExtensions
+{
+    public static string DisplayName(this Branch branch)
+        => branch switch
+        {
+            Branch.Stable => "",
+            Branch.Canary => "Canary",
+            Branch.PTB => "PTB",
+        };
+}
+
+enum OS
+{
+    Unknown,
+    linux,
+    darwin,
+    win,
+}
+
+class OsMetadata
+{
+    public required string TempPath { get; init; }
+    public required string ExeExt { get; init; }
+    public required string ArchiveExt { get; init; }
+
+#region statics
+    public static readonly OS Platform = GetPlatform();
+    public static readonly OsMetadata PlatformMeta = Platform switch
+    {
+        OS.win => new OsMetadata
+        {
+            TempPath = Path.GetTempPath(),
+            ArchiveExt = ".zip",
+            ExeExt = ".exe",
+        },
+        OS.darwin => new OsMetadata
+        {
+            TempPath = "~/Library/Caches",
+            ArchiveExt = ".tar.xz",
+            ExeExt = "",
+        },
+        OS.linux => new OsMetadata
+        {
+            TempPath = "/tmp",
+            ArchiveExt =  ".tar.xz",
+            ExeExt = "",
+        },
+    };
+
+    private static OS GetPlatform()
+    {
+        if (OperatingSystem.IsLinux()) return OS.linux;
+        if (OperatingSystem.IsMacOS()) return OS.darwin;
+        if (OperatingSystem.IsWindows()) return OS.win;
+        return OS.Unknown;
+    }
+#endregion statics
 }
