@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "rdvMH4HfUEvK9l9proZI/J2G++V8K0ppa0yXDTSSbpS9EGZHtQaDf47z1/6rDGj7I8xcQ0I869Xt/z90maZRBg==",
+  "success": true,
+  "projectFilePath": "/mnt/ssd/Workspaces/RiderProjects/csharp-discord-helping/csharp-discord-helping/csharp-discord-helping.csproj",
+  "expectedPackageFiles": [
+    "/home/johnp/.nuget/packages/anglesharp/1.0.7/anglesharp.1.0.7.nupkg.sha512",
+    "/home/johnp/.nuget/packages/octokit/9.0.0/octokit.9.0.0.nupkg.sha512",
+    "/home/johnp/.nuget/packages/system.text.encoding.codepages/7.0.0/system.text.encoding.codepages.7.0.0.nupkg.sha512",
+    "/home/johnp/.nuget/packages/microsoft.aspnetcore.app.ref/7.0.13/microsoft.aspnetcore.app.ref.7.0.13.nupkg.sha512"
+  ],
+  "logs": []
+}

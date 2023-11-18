@@ -1,0 +1,16 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "csharp-discord-helping", "csharp-discord-helping\csharp-discord-helping.csproj", "{FEB55C97-F0E4-46D0-8C8C-F36D0700584A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FEB55C97-F0E4-46D0-8C8C-F36D0700584A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FEB55C97-F0E4-46D0-8C8C-F36D0700584A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FEB55C97-F0E4-46D0-8C8C-F36D0700584A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FEB55C97-F0E4-46D0-8C8C-F36D0700584A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
